@@ -69,7 +69,7 @@ class MISP(Processing):
             event = row.get("Event", {})
             event_id = event.get("id")
 
-	        only_ids = True
+	    only_ids = True
             if self.options.get("only_ids", 'yes') == 'no':
                 only_ids = False
 
