@@ -99,7 +99,6 @@ class MISP(Report):
         in the PCAP (as the PCAP is basically empty)."""
         urls = set()
         ioc_blacklist_file = self.options.get("ioc_blacklist")
-        blacklisted = False
 
         global ioc_blacklist
         if not ioc_blacklist:
@@ -110,11 +109,6 @@ class MISP(Report):
             for entry in results.get("network", {}).get(protocol, []):
                 if self._blacklist_check(entry["host"], "host"):
                     log.info("Found blacklisted host: %s" % entry["host"])
-                    blacklisted = True
-                    break
-
-                if blacklisted:
-                    blacklisted = False
                     continue
 
                 urls.add("%s://%s%s" % (
@@ -129,15 +123,9 @@ class MISP(Report):
             ioc_blacklist=json.load(open(self.options.get("ioc_blacklist")))
 
         domains_and_ips, domains_only, ips = {}, set(), set()
-        blacklisted = False
 
         for domain in results.get("network", {}).get("domains", []):
             if self._blacklist_check(domain["domain"], "host"):
-                blacklisted = True
-                break
-
-            if blacklisted:
-                blacklisted = False
                 continue
 
             if not domain["ip"]:
