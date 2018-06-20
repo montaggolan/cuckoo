@@ -57,11 +57,12 @@ class MISP(Report):
         for i in results.get("dropped", {}):
             try:
                 fp = str(i["filepath"])
-                if str(os.path.splitext(fp)[1]).lower() in extensions_whitelist:
+                fname = ntpath.basename(fp)
+                if str(os.path.splitext(fp)[1]).lower() in extensions_whitelist and fname[:2] != '~$':
                     self.misp.add_hashes(
                         event,
                         category="Artifacts dropped",
-                        filename=ntpath.basename(fp),
+                        filename=fname,
                         md5=i["md5"],
                         sha1=i["sha1"],
                         sha256=i["sha256"],
