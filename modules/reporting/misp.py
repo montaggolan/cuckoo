@@ -54,11 +54,25 @@ class MISP(Report):
         with open(ewf, 'r') as f:
             extensions_whitelist = f.read().splitlines()
 
+        global ioc_blacklist
+        if not ioc_blacklist:
+            self._get_blacklist()
+
         for i in results.get("dropped", {}):
             try:
+                if self._blacklist_check(i["sha256"], "hash"):
+                    self.misp.add_filename(
+                        event,
+                        category="Payload delivery",
+                        comment="Accessed files",
+                        filename=i["filepath"]
+                    )
+                    continue
                 fp = str(i["filepath"])
                 fname = ntpath.basename(fp)
                 if str(os.path.splitext(fp)[1]).lower() in extensions_whitelist and fname[:2] != '~$':
+                    # originalFile = results["target"]["file"]
+                    # if i["md5"] != originalFile["md5"]:
                     self.misp.add_hashes(
                         event,
                         category="Artifacts dropped",
@@ -99,12 +113,10 @@ class MISP(Report):
         outgoing traffic is allowed, 'maldoc' reports URLs that are not present
         in the PCAP (as the PCAP is basically empty)."""
         urls = set()
-        ioc_blacklist_file = self.options.get("ioc_blacklist")
 
         global ioc_blacklist
         if not ioc_blacklist:
-            ioc_blacklist=json.load(open(ioc_blacklist_file))
-
+            self._get_blacklist()
 
         for protocol in ("http_ex", "https_ex"):
             for entry in results.get("network", {}).get(protocol, []):
@@ -121,7 +133,7 @@ class MISP(Report):
     def domain_ipaddr(self, results, event):
         global ioc_blacklist
         if not ioc_blacklist:
-            ioc_blacklist=json.load(open(self.options.get("ioc_blacklist")))
+            self._get_blacklist()
 
         domains_and_ips, domains_only, ips = {}, set(), set()
 
@@ -132,8 +144,10 @@ class MISP(Report):
             if not domain["ip"]:
                 domains_only.add(domain["domain"])
                 continue
-            domains_and_ips[domain["domain"]] = domain["ip"]
-            ips.add(domain["ip"])
+            else:
+                if not self._blacklist_check(domain["ip"], "IP"):
+                    domains_and_ips[domain["domain"]] = domain["ip"]
+                    ips.add(domain["ip"])
 
         ipaddrs = set()
         for ipaddr in results.get("network", {}).get("hosts", []):
@@ -144,6 +158,7 @@ class MISP(Report):
         self.misp.add_domains_ips(event, domains_and_ips, category='Network activity', to_ids=False)
         self.misp.add_ipdst(event, sorted(list(ipaddrs)), category='Network activity', to_ids=False)
         self.misp.add_domain(event, sorted(list(domains_only)), category='Network activity', to_ids=False)
+
 
     def run(self, results):
         """Submits results to MISP.
@@ -232,5 +247,16 @@ class MISP(Report):
                     log.info("IP Blacklist %s" % str(ioc))
                     return True
             return False
+        elif cat == 'hash':
+            for hash in ioc_blacklist["Hashes"]:
+                if ioc == str(hash):
+                    log.info("Hash blacklist %s" % str(ioc))
+                    return True
+                else:
+                    return False
         else:
             return False
+
+    def _get_blacklist(self):
+        global ioc_blacklist
+        ioc_blacklist = json.load(open(self.options.get("ioc_blacklist")))
